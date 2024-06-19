@@ -27,7 +27,7 @@ namespace TBAntiCheat.Detections
                 reason = reason
             };
 
-            DetectionHandler.OnPlayerDetected(metadata);
+            DetectionHandler.OnPlayerDetectedAsync(metadata);
         }
 
         internal virtual void OnPlayerJoin(PlayerData player) { }

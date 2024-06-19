@@ -68,13 +68,11 @@ namespace TBAntiCheat.Detections.Modules
         {
             PlayerFlags flags = (PlayerFlags)player.Pawn.Flags;
             bool onGround = flags.HasFlag(PlayerFlags.FL_ONGROUND);
-
-            //Server.PrintToChatAll($"{player.Controller.PlayerName} | FL_ONGROUND -> {onGround}");
         }
 
         internal override void OnPlayerJump(PlayerData player)
         {
-            Server.PrintToChatAll($"{player.Controller.PlayerName} -> Jumped Goofy Ass Mf");
+
         }
 
         internal override void OnPlayerTick(PlayerData player)
@@ -84,7 +82,7 @@ namespace TBAntiCheat.Detections.Modules
             PlayerButtons buttons = player.Controller.Buttons;
             if (buttons.HasFlag(PlayerButtons.Jump) == true)
             {
-                Server.PrintToChatAll($"{player.Controller.PlayerName} -> Jumped");
+
             }
         }
 

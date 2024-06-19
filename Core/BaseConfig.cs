@@ -1,14 +1,8 @@
 ﻿using System.Text.Json;
+using System.IO;
 
 namespace TBAntiCheat.Core
 {
-    internal class BaseConfig
-    {
-        internal static readonly JsonSerializerOptions JsonSerializerOptions = new JsonSerializerOptions()
-        {
-            WriteIndented = true
-        };
-    }
 
     internal class BaseConfig<T> where T : new()
     {
@@ -31,7 +25,7 @@ namespace TBAntiCheat.Core
 
         internal bool Save()
         {
-            string json = JsonSerializer.Serialize(Config, BaseConfig.JsonSerializerOptions);
+            string json = JsonSerializer.Serialize(Config, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(configPath, json);
 
             return true;
@@ -46,7 +40,7 @@ namespace TBAntiCheat.Core
             }
 
             string json = File.ReadAllText(configPath);
-            Config = JsonSerializer.Deserialize<T>(json, BaseConfig.JsonSerializerOptions);
+            Config = JsonSerializer.Deserialize<T>(json);
 
             return true;
         }

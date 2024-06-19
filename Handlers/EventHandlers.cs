@@ -1,7 +1,6 @@
 ﻿using CounterStrikeSharp.API.Core;
 using TBAntiCheat.Core;
 using TBAntiCheat.Detections;
-using TBAntiCheat.Utils;
 
 namespace TBAntiCheat.Handlers
 {
@@ -43,14 +42,6 @@ namespace TBAntiCheat.Handlers
 
                 Index = (int)controller.Index
             };
-
-            if (BanHandler.IsPlayerBanned(player) == true)
-            {
-                string reason = BanHandler.GetBanReason(player);
-                PlayerUtils.KickPlayer(player, reason);
-
-                return HookResult.Continue;
-            }
 
             Globals.Players.Add(controller.Index, player);
             BaseCaller.OnPlayerJoin(player);

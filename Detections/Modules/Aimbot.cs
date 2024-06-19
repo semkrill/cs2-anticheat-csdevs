@@ -137,8 +137,6 @@ namespace TBAntiCheat.Detections.Modules
 
             AngleSnapshot lastAngle = aimbotData.eyeAngleHistory[aimbotData.historyIndex];
             AngleSnapshot newAngle = new AngleSnapshot(player.Pawn.EyeAngles);
-
-            Server.PrintToChatAll($"Test: {player.Controller.PlayerName} -> New: {newAngle} | {lastAngle}");
         }
 
         internal override void OnPlayerDead(PlayerData victim, PlayerData shooter)
@@ -176,8 +174,6 @@ namespace TBAntiCheat.Detections.Modules
                 {
                     angleDiff = MathF.Abs(angleDiff - 360);
                 }
-
-                Server.PrintToChatAll($"{i}: {shooter.Controller.PlayerName} -> {angleDiff}");
 
                 if (angleDiff > maxAngle)
                 {
@@ -227,12 +223,27 @@ namespace TBAntiCheat.Detections.Modules
             data.detections++;
             ACCore.Log($"[TBAC] {player.Controller.PlayerName}: Suspicious aimbot -> {angleDiff} degrees ({data.detections}/{maxDetections} detections)");
 
+            string reason = $"Aimbot -> {angleDiff}";
+
+            if (ACCore.GetIsPrintDetectToChat())
+            {
+                DetectionMetadata metadata = new DetectionMetadata()
+                {
+                    detection = this,
+                    player = player,
+                    time = DateTime.Now,
+                    reason = reason
+                };
+
+                DetectionHandler.SendChatMessage(metadata);
+            }
+
+
             if (data.detections < maxDetections)
             {
                 return;
             }
 
-            string reason = $"Aimbot -> {angleDiff}";
             OnPlayerDetected(player, reason);
         }
 

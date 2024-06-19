@@ -47,6 +47,20 @@ namespace TBAntiCheat.Detections.Modules
             if (pitch < -89f || pitch > 89f)
             {
                 string reason = $"Untrusted EyeAngles Pitch -> {pitch}";
+
+                if (ACCore.GetIsPrintDetectToChat())
+                {
+                    DetectionMetadata metadata = new DetectionMetadata()
+                    {
+                        detection = this,
+                        player = player,
+                        time = DateTime.Now,
+                        reason = reason
+                    };
+
+                    DetectionHandler.SendChatMessage(metadata);
+                }
+
                 OnPlayerDetected(player, reason);
 
                 return;
@@ -54,6 +68,20 @@ namespace TBAntiCheat.Detections.Modules
             else if (yaw < -180f || yaw > 180f)
             {
                 string reason = $"Untrusted EyeAngles Yaw -> {yaw}";
+
+                if (ACCore.GetIsPrintDetectToChat())
+                {
+                    DetectionMetadata metadata = new DetectionMetadata()
+                    {
+                        detection = this,
+                        player = player,
+                        time = DateTime.Now,
+                        reason = reason
+                    };
+
+                    DetectionHandler.SendChatMessage(metadata);
+                }
+
                 OnPlayerDetected(player, reason);
 
                 return;
@@ -61,6 +89,20 @@ namespace TBAntiCheat.Detections.Modules
             else if (roll < -50f || roll > 50f)
             {
                 string reason = $"Untrusted EyeAngles Roll -> {roll}";
+
+                if (ACCore.GetIsPrintDetectToChat())
+                {
+                    DetectionMetadata metadata = new DetectionMetadata()
+                    {
+                        detection = this,
+                        player = player,
+                        time = DateTime.Now,
+                        reason = reason
+                    };
+
+                    DetectionHandler.SendChatMessage(metadata);
+                }
+
                 OnPlayerDetected(player, reason);
 
                 return;

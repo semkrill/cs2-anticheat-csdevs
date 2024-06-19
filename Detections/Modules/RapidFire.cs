@@ -107,6 +107,20 @@ namespace TBAntiCheat.Detections.Modules
             if (data.rapidDetections >= config.Config.MaxDetectionsBeforeAction)
             {
                 string reason = $"RapidFire -> TickDiff: {tickDiff} | NextAttackDiff: {nextAttack}";
+
+                if (ACCore.GetIsPrintDetectToChat())
+                {
+                    DetectionMetadata metadata = new DetectionMetadata()
+                    {
+                        detection = this,
+                        player = player,
+                        time = DateTime.Now,
+                        reason = reason
+                    };
+
+                    DetectionHandler.SendChatMessage(metadata);
+                }
+
                 OnPlayerDetected(player, reason);
 
                 data.rapidDetections = 0;
