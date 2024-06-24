@@ -1,5 +1,4 @@
-﻿using IksAdminApi;
-using TBAntiCheat.Detections;
+﻿using TBAntiCheat.Detections;
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Core.Translations;
 using CounterStrikeSharp.API;
@@ -31,13 +30,8 @@ namespace TBAntiCheat.Core
                 case ActionType.Kick:
                     ACCore.Log($"[TBAC] {metadata.player.Controller.PlayerName} was kicked for using {metadata.detection.Name} ({metadata.reason})");
 
-                    var playerInfo = new PlayerInfo(
-                        metadata.player.Controller.PlayerName,
-                        metadata.player.Controller.AuthorizedSteamID!.SteamId64,
-                        metadata.player.Controller.IpAddress!.Split(":")[0]
-                    );
-
-                    ACCore.AdminApi.EKick("CONSOLE", playerInfo, $"{metadata.detection.Name} ({metadata.reason})");
+                    var kickCommand = ACCore.GetKickCommand(metadata.player);
+                    ExecuteConsoleCommand(kickCommand);
                     SendChatMessage(metadata);
                     break;
 
@@ -50,44 +44,16 @@ namespace TBAntiCheat.Core
                         reasonForBan = $"{reasonForBan} ({metadata.reason})";
                     }
 
-                    var playerBan = new PlayerBan(
-                        name: metadata.player.Controller.PlayerName,
-                        sid: metadata.player.Controller.AuthorizedSteamID!.SteamId64.ToString(),
-                        ip: metadata.player.Controller.IpAddress!.Split(":")[0],
-                        adminSid: "CONSOLE",
-                        adminName: "Console",
-                        created: GetUnixTimeSeconds(),
-                        time: 0,
-                        end: 0,
-                        reason: reasonForBan,
-                        serverId: ACCore.AdminApi.Config.ServerId,
-                        banType: 0,
-                        unbanned: 0,
-                        unbannedBy: null,
-                        id: null
-                    );
-
-                    bool result = await ACCore.AdminApi.AddBan("CONSOLE", playerBan);
-
-                    if (result)
-                    {
-                        var playerInfo2 = new PlayerInfo(
-                            metadata.player.Controller.PlayerName,
-                            metadata.player.Controller.AuthorizedSteamID!.SteamId64,
-                            metadata.player.Controller.IpAddress!.Split(":")[0]
-                        );
-
-                        ACCore.AdminApi.EKick("CONSOLE", playerInfo2, $"{metadata.detection.Name} ({metadata.reason})");
-                        SendChatMessage(metadata);
-                    }
-                    else
-                    {
-                        Console.WriteLine("Failed to ban the player.");
-                    }
+                    var banCommand = ACCore.GetBanCommand(metadata.player, reasonForBan);
+                    ExecuteConsoleCommand(banCommand);
+                    SendChatMessage(metadata);
                     break;
             }
         }
-
+        private static void ExecuteConsoleCommand(string command)
+        {
+            Server.ExecuteCommand(command);
+        }
         private static int GetUnixTimeSeconds()
         {
             return (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();

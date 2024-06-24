@@ -14,9 +14,6 @@
     <Reference Include="CounterStrikeSharp.API">
       <HintPath>..\CounterStrikeSharp.API.dll</HintPath>
     </Reference>
-    <Reference Include="IksAdminApi">
-      <HintPath>..\IksAdminApi.dll</HintPath>
-    </Reference>
     <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions">
       <HintPath>Dependencies\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath>
     </Reference>

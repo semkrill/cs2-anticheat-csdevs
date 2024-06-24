@@ -26,7 +26,6 @@ namespace TBAntiCheat.Detections
                 time = DateTime.Now,
                 reason = reason
             };
-
             DetectionHandler.OnPlayerDetectedAsync(metadata);
         }
 

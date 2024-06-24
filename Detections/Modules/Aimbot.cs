@@ -3,6 +3,7 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
+using System.Security.Cryptography;
 using TBAntiCheat.Core;
 using TBAntiCheat.Handlers;
 
@@ -15,6 +16,11 @@ namespace TBAntiCheat.Detections.Modules
 
         public float MaxAimbotAngle { get; set; } = 30f;
         public int MaxDetectionsBeforeAction { get; set; } = 2;
+
+        public float MaxHeadshotAngle { get; set; } = 15f;
+        public float MaxBodyshotAngle { get; set; } = 20f;
+        public int MaxHeadshotDetectionsBeforeAction { get; set; } = 1;
+        public int MaxBodyshotDetectionsBeforeAction { get; set; } = 2;
     }
 
     internal struct AngleSnapshot
@@ -56,12 +62,11 @@ namespace TBAntiCheat.Detections.Modules
 
         public static float Distance(AngleSnapshot a, AngleSnapshot b)
         {
-            float newX = a.x - b.x;
-            float newY = a.y - b.y;
-            float newZ = a.z - b.z;
+            float deltaX = a.x - b.x;
+            float deltaY = a.y - b.y;
+            float deltaZ = a.z - b.z;
 
-            float distance = MathF.Sqrt(newX * newX + newY * newY + newZ * newZ);
-            return distance;
+            return MathF.Sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
         }
 
         internal void Reset()
@@ -79,14 +84,25 @@ namespace TBAntiCheat.Detections.Modules
 
     internal class PlayerAimbotData
     {
-        internal required AngleSnapshot[] eyeAngleHistory;
-        internal required int historyIndex;
+        internal static readonly int aimbotMaxHistory = 64; // 1 entire second worth of history (considering the tickrate is 64)
+        internal AngleSnapshot[] eyeAngleHistory;
+        internal int historyIndex;
+        internal int headshotDetections;
+        internal int bodyshotDetections;
 
-        internal required int detections;
+        public PlayerAimbotData()
+        {
+            eyeAngleHistory = new AngleSnapshot[aimbotMaxHistory];
+            historyIndex = 0;
+            headshotDetections = 0;
+            bodyshotDetections = 0;
+        }
 
         internal void Reset()
         {
             historyIndex = 0;
+            headshotDetections = 0;
+            bodyshotDetections = 0;
 
             for (int i = 0; i < eyeAngleHistory.Length; i++)
             {
@@ -95,21 +111,20 @@ namespace TBAntiCheat.Detections.Modules
         }
     }
 
-    /*
-     * Module: Aimbot
-     * Purpose: Detect players which flick with their eye angles at high velocity. Nobody can reliably flick 20+ degrees in a single tick and still hit players
-     */
     internal class Aimbot : BaseDetection
     {
-        private const int aimbotMaxHistory = 64; //1 entire second worth of history (considering the tickrate is 64)
-
         private readonly BaseConfig<AimbotSaveData> config;
-        private readonly PlayerAimbotData[] eyeAngleHistory;
+        private readonly PlayerAimbotData[] playerAimbotData;
 
         internal Aimbot() : base()
         {
             config = new BaseConfig<AimbotSaveData>("Aimbot");
-            eyeAngleHistory = new PlayerAimbotData[Server.MaxPlayers];
+            playerAimbotData = new PlayerAimbotData[Server.MaxPlayers];
+
+            for (int i = 0; i < playerAimbotData.Length; i++)
+            {
+                playerAimbotData[i] = new PlayerAimbotData();
+            }
 
             CommandHandler.RegisterCommand("tbac_aimbot_enable", "Activates/Deactivates the aimbot detection", OnEnableCommand);
             CommandHandler.RegisterCommand("tbac_aimbot_action", "Which action to take on the player. 0 = none | 1 = log | 2 = kick | 3 = ban", OnActionCommand);
@@ -122,26 +137,12 @@ namespace TBAntiCheat.Detections.Modules
 
         internal override void OnPlayerJoin(PlayerData player)
         {
-            eyeAngleHistory[player.Index] = new PlayerAimbotData()
-            {
-                eyeAngleHistory = new AngleSnapshot[aimbotMaxHistory],
-                historyIndex = 0,
-
-                detections = 0
-            };
-        }
-
-        internal override void OnPlayerShoot(PlayerData player)
-        {
-            PlayerAimbotData aimbotData = eyeAngleHistory[player.Index];
-
-            AngleSnapshot lastAngle = aimbotData.eyeAngleHistory[aimbotData.historyIndex];
-            AngleSnapshot newAngle = new AngleSnapshot(player.Pawn.EyeAngles);
+            playerAimbotData[player.Index].Reset();
         }
 
         internal override void OnPlayerDead(PlayerData victim, PlayerData shooter)
         {
-            if (config.Config.DetectionEnabled == false)
+            if (!config.Config.DetectionEnabled)
             {
                 return;
             }
@@ -151,82 +152,64 @@ namespace TBAntiCheat.Detections.Modules
                 return;
             }
 
-            PlayerAimbotData aimbotData = eyeAngleHistory[shooter.Index];
+            PlayerAimbotData aimbotData = playerAimbotData[shooter.Index];
+            AngleSnapshot lastAngle = aimbotData.eyeAngleHistory[aimbotData.historyIndex];
+            float maxHeadshotAngle = config.Config.MaxHeadshotAngle;
+            float maxBodyshotAngle = config.Config.MaxBodyshotAngle;
+            bool isHeadshot = victim.Pawn.LastHitGroup == HitGroup_t.HITGROUP_HEAD;
 
-            int historyIndex = aimbotData.historyIndex;
-            AngleSnapshot lastAngle = aimbotData.eyeAngleHistory[historyIndex];
-
-            float maxAngle = config.Config.MaxAimbotAngle;
-
-            historyIndex++;
-            for (int i = historyIndex; i < aimbotMaxHistory; i++)
+            for (int i = 0; i < PlayerAimbotData.aimbotMaxHistory; i++)
             {
-                if (historyIndex >= aimbotMaxHistory)
-                {
-                    historyIndex = 0;
-                }
-
-                AngleSnapshot currentAngle = aimbotData.eyeAngleHistory[historyIndex];
+                AngleSnapshot currentAngle = aimbotData.eyeAngleHistory[(aimbotData.historyIndex + i) % PlayerAimbotData.aimbotMaxHistory];
                 float angleDiff = AngleSnapshot.Distance(lastAngle, currentAngle);
 
-                //Normalize the angle so we can use it for our aimbot detection logic
+                // Normalize angle difference
                 if (angleDiff > 180f)
                 {
                     angleDiff = MathF.Abs(angleDiff - 360);
                 }
 
-                if (angleDiff > maxAngle)
+                if ((isHeadshot && angleDiff > maxHeadshotAngle) || (!isHeadshot && angleDiff > maxBodyshotAngle))
                 {
-                    OnAimbotDetected(shooter, aimbotData, angleDiff);
+                    OnAimbotDetected(shooter, aimbotData, angleDiff, isHeadshot);
                     break;
                 }
 
                 lastAngle = currentAngle;
-                historyIndex++;
             }
         }
 
         internal override void OnPlayerTick(PlayerData player)
         {
-            if (config.Config.DetectionEnabled == false)
+            if (!config.Config.DetectionEnabled)
             {
                 return;
             }
 
-            PlayerAimbotData aimbotData = eyeAngleHistory[player.Index];
+            PlayerAimbotData aimbotData = playerAimbotData[player.Index];
+            aimbotData.eyeAngleHistory[aimbotData.historyIndex] = new AngleSnapshot(player.Pawn.EyeAngles);
 
-            AngleSnapshot snapshot = new AngleSnapshot(player.Pawn.EyeAngles);
-            aimbotData.eyeAngleHistory[aimbotData.historyIndex] = snapshot;
-
-            aimbotData.historyIndex++;
-            if (aimbotData.historyIndex == aimbotMaxHistory)
-            {
-                aimbotData.historyIndex = 0;
-            }
+            aimbotData.historyIndex = (aimbotData.historyIndex + 1) % PlayerAimbotData.aimbotMaxHistory;
         }
 
         internal override void OnRoundStart()
         {
-            foreach (KeyValuePair<uint, PlayerData> player in Globals.Players)
+            foreach (var player in Globals.Players.Values)
             {
-                PlayerData data = player.Value;
-                PlayerAimbotData aimbotData = eyeAngleHistory[data.Index];
-
-                aimbotData.Reset();
+                playerAimbotData[player.Index].Reset();
             }
         }
 
-        private void OnAimbotDetected(PlayerData player, PlayerAimbotData data, float angleDiff)
+        private void OnAimbotDetected(PlayerData player, PlayerAimbotData data, float angleDiff, bool isHeadshot)
         {
-            int maxDetections = config.Config.MaxDetectionsBeforeAction;
-
-            data.detections++;
-            ACCore.Log($"[TBAC] {player.Controller.PlayerName}: Suspicious aimbot -> {angleDiff} degrees ({data.detections}/{maxDetections} detections)");
-
-            string reason = $"Aimbot -> {angleDiff}";
-
-            if (ACCore.GetIsPrintDetectToChat())
+            if (isHeadshot)
             {
+                data.headshotDetections++;
+                int maxDetections = config.Config.MaxHeadshotDetectionsBeforeAction;
+
+                ACCore.Log($"[TBAC] {player.Controller.PlayerName}: Suspicious headshot aimbot -> {angleDiff} degrees ({data.headshotDetections}/{maxDetections} detections)");
+                string reason = $"Headshot Aimbot -> {angleDiff}";
+
                 DetectionMetadata metadata = new DetectionMetadata()
                 {
                     detection = this,
@@ -236,15 +219,35 @@ namespace TBAntiCheat.Detections.Modules
                 };
 
                 DetectionHandler.SendChatMessage(metadata);
+
+                if (data.headshotDetections >= maxDetections)
+                {
+                    OnPlayerDetected(player, reason);
+                }
             }
-
-
-            if (data.detections < maxDetections)
+            else
             {
-                return;
-            }
+                data.bodyshotDetections++;
+                int maxDetections = config.Config.MaxBodyshotDetectionsBeforeAction;
 
-            OnPlayerDetected(player, reason);
+                ACCore.Log($"[TBAC] {player.Controller.PlayerName}: Suspicious bodyshot aimbot -> {angleDiff} degrees ({data.bodyshotDetections}/{maxDetections} detections)");
+                string reason = $"Bodyshot Aimbot -> {angleDiff}";
+
+                DetectionMetadata metadata = new DetectionMetadata()
+                {
+                    detection = this,
+                    player = player,
+                    time = DateTime.Now,
+                    reason = reason
+                };
+
+                DetectionHandler.SendChatMessage(metadata);
+
+                if (data.bodyshotDetections >= maxDetections)
+                {
+                    OnPlayerDetected(player, reason);
+                }
+            }
         }
 
         // ----- Commands ----- \\
@@ -257,14 +260,11 @@ namespace TBAntiCheat.Detections.Modules
                 return;
             }
 
-            string arg = command.ArgByIndex(1);
-            if (bool.TryParse(arg, out bool state) == false)
+            if (bool.TryParse(command.ArgByIndex(1), out bool state))
             {
-                return;
+                config.Config.DetectionEnabled = state;
+                config.Save();
             }
-
-            config.Config.DetectionEnabled = state;
-            config.Save();
         }
 
         [RequiresPermissions("@css/admin")]
@@ -275,20 +275,11 @@ namespace TBAntiCheat.Detections.Modules
                 return;
             }
 
-            string arg = command.ArgByIndex(1);
-            if (int.TryParse(arg, out int action) == false)
+            if (int.TryParse(command.ArgByIndex(1), out int action))
             {
-                return;
+                config.Config.DetectionAction = (ActionType)action;
+                config.Save();
             }
-
-            ActionType actionType = (ActionType)action;
-            if (config.Config.DetectionAction.HasFlag(actionType) == false)
-            {
-                return;
-            }
-
-            config.Config.DetectionAction = actionType;
-            config.Save();
         }
 
         [RequiresPermissions("@css/admin")]
@@ -299,14 +290,11 @@ namespace TBAntiCheat.Detections.Modules
                 return;
             }
 
-            string arg = command.ArgByIndex(1);
-            if (float.TryParse(arg, out float angle) == false)
+            if (float.TryParse(command.ArgByIndex(1), out float angle))
             {
-                return;
+                config.Config.MaxAimbotAngle = angle;
+                config.Save();
             }
-
-            config.Config.MaxAimbotAngle = angle;
-            config.Save();
         }
 
         [RequiresPermissions("@css/admin")]
@@ -317,14 +305,11 @@ namespace TBAntiCheat.Detections.Modules
                 return;
             }
 
-            string arg = command.ArgByIndex(1);
-            if (int.TryParse(arg, out int detections) == false)
+            if (int.TryParse(command.ArgByIndex(1), out int detections))
             {
-                return;
+                config.Config.MaxDetectionsBeforeAction = detections;
+                config.Save();
             }
-
-            config.Config.MaxDetectionsBeforeAction = detections;
-            config.Save();
         }
     }
 }

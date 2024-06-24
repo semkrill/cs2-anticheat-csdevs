@@ -14,14 +14,14 @@ namespace TBAntiCheat.Handlers
 
         private static void OnMapStart(string mapName)
         {
-            Globals.Initialize();
+            Globals.Initialize(false);
         }
 
         private static void OnGameTick()
         {
             BaseCaller.OnGameTick();
 
-            foreach(KeyValuePair<uint, PlayerData> player in Globals.Players)
+            foreach (KeyValuePair<uint, PlayerData> player in Globals.Players)
             {
                 BaseCaller.OnPlayerTick(player.Value);
             }

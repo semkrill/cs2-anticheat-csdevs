@@ -3,6 +3,13 @@ using System.IO;
 
 namespace TBAntiCheat.Core
 {
+    internal class BaseConfig
+    {
+        internal static readonly JsonSerializerOptions JsonSerializerOptions = new JsonSerializerOptions()
+        {
+            WriteIndented = true
+        };
+    }
 
     internal class BaseConfig<T> where T : new()
     {
@@ -11,8 +18,8 @@ namespace TBAntiCheat.Core
 
         internal BaseConfig(string path)
         {
-            string folderPath = $"{ACCore.GetCore().ModuleDirectory}/Configs/";
-            if (Directory.Exists(folderPath) == false)
+            string folderPath = $"{Globals.GetModuleDirectory()}/Configs/";
+            if (!Directory.Exists(folderPath))
             {
                 Directory.CreateDirectory(folderPath);
             }
@@ -25,23 +32,28 @@ namespace TBAntiCheat.Core
 
         internal bool Save()
         {
-            string json = JsonSerializer.Serialize(Config, new JsonSerializerOptions { WriteIndented = true });
+            string json = JsonSerializer.Serialize(Config, BaseConfig.JsonSerializerOptions);
             File.WriteAllText(configPath, json);
-
             return true;
         }
 
         internal bool Load()
         {
-            if (File.Exists(configPath) == false)
+            if (!File.Exists(configPath))
             {
                 Save();
                 return false;
             }
 
             string json = File.ReadAllText(configPath);
-            Config = JsonSerializer.Deserialize<T>(json);
+            T? possibleConfig = JsonSerializer.Deserialize<T>(json, BaseConfig.JsonSerializerOptions);
 
+            if (possibleConfig == null)
+            {
+                return false;
+            }
+
+            Config = possibleConfig;
             return true;
         }
     }

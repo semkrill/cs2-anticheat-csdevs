@@ -17,12 +17,19 @@ namespace TBAntiCheat.Core
     {
         private static bool InitializedOnce = false;
 
-        internal static Dictionary<uint, PlayerData> Players = null;
-        internal static BaseDetection[] Detections = null;
+        private static ACCore? pluginCore = null;
 
-        internal static void Initialize()
+        internal static Dictionary<uint, PlayerData> Players = [];
+        internal static BaseDetection[] Detections = [];
+
+        internal static void PreInit(ACCore core)
         {
-            if (InitializedOnce == true)
+            pluginCore = core;
+        }
+
+        internal static void Initialize(bool hotReload)
+        {
+            if (InitializedOnce == true && hotReload == false)
             {
                 return;
             }
@@ -30,15 +37,20 @@ namespace TBAntiCheat.Core
             Players = new Dictionary<uint, PlayerData>(Server.MaxPlayers);
             Detections =
             [
-                new Aimbot(),
-                new Backtrack(),
-                new BunnyHop(),
-                new NoSpread(),
-                new RapidFire(),
-                //new UntrustedAngles()
+                new Aimbot()
             ];
 
             InitializedOnce = true;
+        }
+
+        internal static string GetModuleDirectory()
+        {
+            if (pluginCore == null)
+            {
+                return string.Empty;
+            }
+
+            return pluginCore.ModuleDirectory;
         }
     }
 }

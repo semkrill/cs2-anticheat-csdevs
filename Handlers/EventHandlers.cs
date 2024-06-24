@@ -1,4 +1,5 @@
-﻿using CounterStrikeSharp.API.Core;
+﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API.Core;
 using TBAntiCheat.Core;
 using TBAntiCheat.Detections;
 
@@ -6,12 +7,11 @@ namespace TBAntiCheat.Handlers
 {
     internal static class EventHandlers
     {
-        internal static void InitializeHandlers(BasePlugin plugin)
+        internal static void InitializeHandlers(BasePlugin plugin, bool hotReload)
         {
             plugin.RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnectFull);
             plugin.RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
 
-            plugin.RegisterEventHandler<EventPlayerJump>(OnPlayerJump);
             plugin.RegisterEventHandler<EventPlayerHurt>(OnPlayerHurt);
             plugin.RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
 
@@ -19,6 +19,14 @@ namespace TBAntiCheat.Handlers
 
             plugin.RegisterEventHandler<EventRoundStart>(OnRoundStart);
             plugin.RegisterEventHandler<EventRoundEnd>(OnRoundEnd);
+
+            if (hotReload == true)
+            {
+                foreach (CCSPlayerController controller in Utilities.GetPlayers())
+                {
+                    JoinPlayer(controller);
+                }
+            }
         }
 
         private static HookResult OnPlayerConnectFull(EventPlayerConnectFull connectEvent, GameEventInfo _)
@@ -29,10 +37,17 @@ namespace TBAntiCheat.Handlers
                 return HookResult.Continue;
             }
 
+            JoinPlayer(controller);
+
+            return HookResult.Continue;
+        }
+
+        private static void JoinPlayer(CCSPlayerController controller)
+        {
             CCSPlayerPawn? pawn = controller.PlayerPawn.Value;
             if (pawn == null)
             {
-                return HookResult.Continue;
+                return;
             }
 
             PlayerData player = new PlayerData()
@@ -45,8 +60,6 @@ namespace TBAntiCheat.Handlers
 
             Globals.Players.Add(controller.Index, player);
             BaseCaller.OnPlayerJoin(player);
-
-            return HookResult.Continue;
         }
 
         private static HookResult OnPlayerDisconnect(EventPlayerDisconnect connectEvent, GameEventInfo _)
@@ -62,36 +75,15 @@ namespace TBAntiCheat.Handlers
                 return HookResult.Continue;
             }
 
-            PlayerData player = Globals.Players[controller.Index];
-
-            BaseCaller.OnPlayerLeave(player);
-            Globals.Players.Remove(controller.Index);
+            if (Globals.Players.TryGetValue(controller.Index, out PlayerData player))
+            {
+                BaseCaller.OnPlayerLeave(player);
+                Globals.Players.Remove(controller.Index);
+            }
 
             return HookResult.Continue;
         }
 
-        private static HookResult OnPlayerJump(EventPlayerJump jumpEvent, GameEventInfo _)
-        {
-            if (jumpEvent.Userid == null)
-            {
-                return HookResult.Continue;
-            }
-
-            if (jumpEvent.Userid.IsBot == true)
-            {
-                return HookResult.Continue;
-            }
-
-            if (Globals.Players.ContainsKey(jumpEvent.Userid.Index) == false)
-            {
-                return HookResult.Continue;
-            }
-
-            PlayerData player = Globals.Players[jumpEvent.Userid.Index];
-            BaseCaller.OnPlayerJump(player);
-
-            return HookResult.Continue;
-        }
 
         private static HookResult OnPlayerHurt(EventPlayerHurt hurtEvent, GameEventInfo _)
         {
